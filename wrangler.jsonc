@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agent-boilerplate",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-05",
+  "compatibility_flags": ["nodejs_compat", "enable_ctx_exports"],
+  "observability": {
+    "enabled": true
+  },
+  "durable_objects": {
+    "bindings": [
+      { "class_name": "ChatAgent", "name": "ChatAgent" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ChatAgent"] }
+  ],
+  // Worker Loader binding — lets the agent run dynamically-supplied code in a
+  // sandbox, with the SLACK / DATABASE entrypoints injected as env bindings.
+  "worker_loaders": [{ "binding": "LOADER" }],
+  // Treat *.sandbox.js files as text imports — they are sandbox source code
+  // shipped to env.LOADER, not part of the agent worker's own module graph.
+  "rules": [
+    { "type": "Text", "globs": ["**/*.sandbox.js"], "fallthrough": false }
+  ]
+}
