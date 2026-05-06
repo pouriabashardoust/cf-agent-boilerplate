@@ -6,7 +6,9 @@ It is intentionally minimal. Treat the files as a starting point — copy this d
 
 ## What's in the box
 
-- `src/agent.ts` — `ChatAgent` extends `Think<Env>`. Implements `getModel()` (Gemini 2.5 Pro), `getSystemPrompt()`, and one example tool `blockedJobsToSlack` that runs a baked-in ES-module Worker through `env.LOADER` with `env.SLACK` / `env.DATABASE` injected. The private helper `runInSandbox(code, permissions)` is the seam: each new tool is "constant string of Worker source + array of permission scopes + one line in `getTools()`".
+- `src/agent.ts` — `ChatAgent` extends `Think<Env>`. Implements `getModel()` (Gemini 2.5 Pro), `getSystemPrompt()`, and one example tool `blockedJobsToSlack` that runs a sandbox source module through `env.LOADER` with `env.SLACK` / `env.DATABASE` injected. The private helper `runInSandbox(code, permissions)` is the seam: each new tool is "import the sandbox source + one entry in `getTools()`".
+- `src/tools/*.sandbox.js` — sandbox source modules. Each one is a complete ES module exporting a `default` `fetch` handler. They are bundled as **text strings** (see `rules` in `wrangler.jsonc`) and shipped to `env.LOADER` at tool-call time; they never run inside the agent worker itself.
+- `src/tools/*.sandbox.d.ts` — one-line declaration so TypeScript treats the matching `.sandbox.js` import as `string`.
 - `src/index.ts` — Worker entry. Default export routes via `routeAgentRequest`. Also re-exports `ChatAgent`, `Slack`, and `Database` so the Workers runtime can find them.
 - `src/bindings/slack.ts` — `Slack` `WorkerEntrypoint`. Single method `sendMessage(email, text)` gated on the `slack:send_message` scope.
 - `src/bindings/database.ts` — `Database` `WorkerEntrypoint`. Methods for listing tables / reading job events / unblocking jobs, each gated on its own scope. Uses `@neondatabase/serverless`.
@@ -27,16 +29,31 @@ The model only ever sees the tool *names* (`blockedJobsToSlack`, etc.). It canno
 
 ### Adding a new tool
 
-1. Add a `const FOO_BAR = \`export default { ... }\`;` constant near the top of `src/agent.ts`. Inside, use `env.SLACK` / `env.DATABASE` and return `Response.json(...)`.
-2. Add an entry to `getTools()`:
+1. Create `src/tools/foo-bar.sandbox.js`:
+   ```js
+   export default {
+     async fetch(_req, env) {
+       // use env.SLACK / env.DATABASE here
+       return Response.json({ ok: true });
+     },
+   };
+   ```
+2. Create the sibling `src/tools/foo-bar.sandbox.d.ts` (TS won't accept the import without it):
    ```ts
+   declare const source: string;
+   export default source;
+   ```
+3. In `src/agent.ts`, import it and add a tool entry:
+   ```ts
+   import FOO_BAR from "./tools/foo-bar.sandbox.js";
+   // ...
    fooBar: tool({
      description: "...",
      inputSchema: z.object({}),
      execute: async () => run(FOO_BAR, ["scope:one", "scope:two"]),
    }),
    ```
-3. Grant only the scopes the snippet actually needs — `RequirePermission` will reject anything else at call time.
+4. Grant only the scopes the snippet actually needs — `RequirePermission` rejects anything else at call time.
 
 ## First-time setup
 
