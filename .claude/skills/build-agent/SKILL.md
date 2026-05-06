@@ -152,7 +152,9 @@ Pick a name that reflects the agent's purpose; "ChatAgent" / "agent-boilerplate"
   - `durable_objects.bindings[].class_name` and `.name` → both `"<NewName>"`.
   - **Bump the migration tag** (`v1` → `v2`) and update `new_sqlite_classes` to the new class name. **Never reuse a tag.** Reusing breaks the migration.
 - `src/playground.html`:
-  - The `<title>` and the `<h1>` — set to something user-facing like "Blocked Jobs Agent · playground".
+  - The `<title>` element — set to "<Friendly Agent Name> · playground".
+  - The sidebar `.brand .name` and `.brand .sub` divs — set to the friendly name and a one-line subtitle (e.g. "DB → Slack · powered by Claude").
+  - The empty-state `<h2>` and `<p>` — give it a hint like "Ask about blocked jobs" and a sample prompt.
   - The WebSocket URL: `/agents/chat-agent/${instance}` → `/agents/<kebab-class-name>/${instance}`. The class name is converted to kebab-case for the URL slot (e.g. `BlockedJobsAgent` → `blocked-jobs-agent`).
 
 Run `npx wrangler types` after the wrangler edits — it regenerates `worker-configuration.d.ts` so `Env` reflects the new DO binding name. If you skip this, you'll see TS errors on `this.env.<NewName>`.
