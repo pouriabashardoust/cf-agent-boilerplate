@@ -13,7 +13,8 @@ It is intentionally minimal. Treat the files as a starting point — copy this d
 - `src/bindings/slack.ts` — `Slack` `WorkerEntrypoint`. Single method `sendMessage(email, text)` gated on the `slack:send_message` scope.
 - `src/bindings/database.ts` — `Database` `WorkerEntrypoint`. Methods for listing tables / reading job events / unblocking jobs, each gated on its own scope. Uses `@neondatabase/serverless`.
 - `src/shared/permissions.ts` — `RequirePermission` decorator and `assertPermission` helper. Direct in-worker calls (no `props`) are always allowed; calls from a sandbox stub created with `ctx.exports.X({ props: { permissions } })` are checked.
-- `src/env.d.ts` — augments `Cloudflare.Env` with the secrets `wrangler types` doesn't introspect: `ANTHROPIC_API_KEY`, `SLACK_BOT_TOKEN`, `DATABASE_URL`.
+- `src/env.d.ts` — augments `Cloudflare.Env` with the secrets `wrangler types` doesn't introspect: `ANTHROPIC_API_KEY`, `SLACK_BOT_TOKEN`, `DATABASE_URL`, plus the optional `POSTHOG_API_KEY` / `POSTHOG_HOST`.
+- `src/posthog.ts` — `tracedModel(env, model, opts)` wraps a Vercel-AI-SDK model with PostHog LLM tracing via `@posthog/ai/vercel`. Returns the model unchanged if `POSTHOG_API_KEY` isn't set, so tracing is opt-in. The `agent.ts` `getModel()` passes `this.name` (the DO instance / conversation ID) as the `distinctId`.
 - `wrangler.jsonc` — DO binding for `ChatAgent` (`v1` SQLite migration), `worker_loaders: [{ binding: "LOADER" }]`, and `compatibility_flags: ["nodejs_compat", "enable_ctx_exports"]`.
 - `tsconfig.json` — strict TS, picks up the generated `worker-configuration.d.ts`.
 
@@ -65,6 +66,9 @@ npx wrangler secret put ANTHROPIC_API_KEY
 # Optional, only if you actually use the bindings:
 npx wrangler secret put SLACK_BOT_TOKEN
 npx wrangler secret put DATABASE_URL
+# Optional, enables LLM tracing to PostHog when set:
+npx wrangler secret put POSTHOG_API_KEY
+npx wrangler secret put POSTHOG_HOST  # defaults to https://us.i.posthog.com
 
 # Generate the Env type (writes worker-configuration.d.ts)
 npx wrangler types

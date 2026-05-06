@@ -1,3 +1,5 @@
+// BOILERPLATE / REFERENCE ONLY — example sandbox source illustrating the
+// `env.DATABASE` + `env.SLACK` calling pattern. Delete or replace.
 export default {
   async fetch(_req, env) {
     const { jobs } = await env.DATABASE.getBlockedJobs();

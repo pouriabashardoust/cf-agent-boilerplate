@@ -13,6 +13,9 @@ type ToolSpec = {
   permissions: string[];
 };
 
+// BOILERPLATE / REFERENCE ONLY.
+// These tools exist to demonstrate the LOADER + permissioned-binding pattern.
+// Replace this array with your own tools — see CLAUDE.md "Adding a new tool".
 const TOOLS: readonly ToolSpec[] = [
   {
     name: "blockedJobsToSlack",

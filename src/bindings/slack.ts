@@ -1,3 +1,5 @@
+// BOILERPLATE / REFERENCE ONLY — example WorkerEntrypoint showing the
+// `@RequirePermission` pattern. Replace with your own entity bindings.
 import { WorkerEntrypoint } from "cloudflare:workers";
 
 import { RequirePermission } from "../shared/permissions";
