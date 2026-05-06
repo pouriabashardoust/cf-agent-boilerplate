@@ -112,6 +112,7 @@ Structure:
 1. **One sentence: who the agent is and what it owns.**
 2. **For each tool: when to call it, in plain English.** Don't repeat the tool description verbatim — paraphrase the *intent* so the model knows the situation, not just the API.
 3. **Guardrails the tools can't enforce.** Examples: "Don't summarise data you haven't fetched", "If asked for something none of these tools cover, say so plainly rather than improvising", "Don't call the same tool twice in a row without a reason."
+4. **Scheduling guidance.** The boilerplate ships with `schedule_task` / `list_schedules` / `cancel_schedule` already wired up — every agent gets these for free via `getScheduleTools()` in `agent.ts`. Mention them in the prompt so the model knows it can defer work: e.g. "If the user asks for anything to happen later, repeatedly, or on a schedule, call `schedule_task` BEFORE replying. `kind` is 'delay' (seconds), 'date' (ISO), or 'cron'." Don't remove the schedule tools when replacing `getTools()` — keep the `...this.getScheduleTools(),` spread.
 
 Example for an agent with one `notifyOncallOfBlockedJobs` tool:
 

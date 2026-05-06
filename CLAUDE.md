@@ -6,7 +6,7 @@ It is intentionally minimal. Treat the files as a starting point — copy this d
 
 ## What's in the box
 
-- `src/agent.ts` — `ChatAgent` extends `Think<Env>`. Implements `getModel()` (Anthropic Haiku 4.5), `getSystemPrompt()`, and one example tool `blockedJobsToSlack` that runs a sandbox source module through `env.LOADER` with `env.SLACK` / `env.DATABASE` injected. The private helper `runInSandbox(code, permissions)` is the seam: each new tool is "import the sandbox source + one entry in `getTools()`".
+- `src/agent.ts` — `ChatAgent` extends `Think<Env>`. Implements `getModel()` (Anthropic Haiku 4.5), `getSystemPrompt()`, an example tool `blockedJobsToSlack` that runs a sandbox source module through `env.LOADER` with `env.SLACK` / `env.DATABASE` injected, and the schedule tools (`schedule_task` / `list_schedules` / `cancel_schedule`) plus `runScheduledPrompt(payload)` — when a scheduled task fires, the saved prompt is replayed as a user turn and the stream is broadcast to any connected playground tab. The private helper `runInSandbox(code, permissions)` is the seam for new sandboxed tools.
 - `src/tools/*.sandbox.js` — sandbox source modules. Each one is a complete ES module exporting a `default` `fetch` handler. They are bundled as **text strings** (see `rules` in `wrangler.jsonc`) and shipped to `env.LOADER` at tool-call time; they never run inside the agent worker itself.
 - `src/tools/*.sandbox.d.ts` — one-line declaration so TypeScript treats the matching `.sandbox.js` import as `string`.
 - `src/index.ts` — Worker entry. Default export routes via `routeAgentRequest`. Also re-exports `ChatAgent`, `Slack`, and `Database` so the Workers runtime can find them.
@@ -27,6 +27,16 @@ Tools follow a "code-mode" pattern: instead of exposing `env.SLACK` / `env.DATAB
 3. The sandbox calls `env.SLACK.sendMessage(...)` / `env.DATABASE.listTables()`. Each call passes through `RequirePermission`, which reads the props off the RPC context and rejects the call if the matching scope isn't in the granted list.
 
 The model only ever sees the tool *names* (`blockedJobsToSlack`, etc.). It cannot escape the predefined code or escalate beyond the scopes that tool was registered with.
+
+## Scheduling
+
+Three built-in tools let the agent schedule future turns of itself:
+
+- `schedule_task({ kind, when, prompt })` — `kind` is `'delay'` (seconds), `'date'` (ISO string), or `'cron'`. The saved `prompt` becomes a user message at fire time.
+- `list_schedules()` — returns all active schedules.
+- `cancel_schedule({ id })` — cancels by id.
+
+When a scheduled task fires, `runScheduledPrompt({ prompt })` is invoked by the alarm system. It calls `this.chat(prompt, callback)` to run a full agentic turn and rebroadcasts each chunk via `_broadcastChat` + a final `_broadcastMessages()` so any playground tab connected at the time sees the streaming response live. Disconnected clients pick it up on next reconnect via the standard `cf_agent_chat_messages` history replay.
 
 ### Adding a new tool
 
