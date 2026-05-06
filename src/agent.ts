@@ -4,6 +4,7 @@ import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 
 import BLOCKED_JOBS_TO_SLACK from "./tools/blocked-jobs-to-slack.sandbox.js";
+import { tracedModel } from "./posthog";
 
 type ToolSpec = {
   name: string;
@@ -31,7 +32,9 @@ export const TOOL_MANIFEST = TOOLS.map(({ name, description, permissions }) => (
 export class ChatAgent extends Think<Env> {
   getModel() {
     const anthropic = createAnthropic({ apiKey: this.env.ANTHROPIC_API_KEY });
-    return anthropic("claude-haiku-4-5-20251001");
+    return tracedModel(this.env, anthropic("claude-haiku-4-5-20251001"), {
+      distinctId: this.name,
+    });
   }
 
   getSystemPrompt() {
