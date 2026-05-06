@@ -12,7 +12,8 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": false,
+    "allowArbitraryExtensions": true
   },
   "include": ["src/**/*.ts", "worker-configuration.d.ts"]
 }

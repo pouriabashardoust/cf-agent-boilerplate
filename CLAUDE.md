@@ -1,19 +1,19 @@
 # agent-boilerplate
 
-This is a **boilerplate** for scaffolding [Cloudflare Think agents](https://developers.cloudflare.com/agents/api-reference/think/) that run on Workers + Durable Objects, use Gemini via `@ai-sdk/google`, and can execute dynamically-supplied code in a Worker Loader sandbox with permissioned `Slack` and `Database` bindings.
+This is a **boilerplate** for scaffolding [Cloudflare Think agents](https://developers.cloudflare.com/agents/api-reference/think/) that run on Workers + Durable Objects, use Anthropic Haiku 4.5 via `@ai-sdk/anthropic`, and can execute dynamically-supplied code in a Worker Loader sandbox with permissioned `Slack` and `Database` bindings.
 
 It is intentionally minimal. Treat the files as a starting point — copy this directory, rename, and fill in the agent's real behavior.
 
 ## What's in the box
 
-- `src/agent.ts` — `ChatAgent` extends `Think<Env>`. Implements `getModel()` (Gemini 2.5 Pro), `getSystemPrompt()`, and one example tool `blockedJobsToSlack` that runs a sandbox source module through `env.LOADER` with `env.SLACK` / `env.DATABASE` injected. The private helper `runInSandbox(code, permissions)` is the seam: each new tool is "import the sandbox source + one entry in `getTools()`".
+- `src/agent.ts` — `ChatAgent` extends `Think<Env>`. Implements `getModel()` (Anthropic Haiku 4.5), `getSystemPrompt()`, and one example tool `blockedJobsToSlack` that runs a sandbox source module through `env.LOADER` with `env.SLACK` / `env.DATABASE` injected. The private helper `runInSandbox(code, permissions)` is the seam: each new tool is "import the sandbox source + one entry in `getTools()`".
 - `src/tools/*.sandbox.js` — sandbox source modules. Each one is a complete ES module exporting a `default` `fetch` handler. They are bundled as **text strings** (see `rules` in `wrangler.jsonc`) and shipped to `env.LOADER` at tool-call time; they never run inside the agent worker itself.
 - `src/tools/*.sandbox.d.ts` — one-line declaration so TypeScript treats the matching `.sandbox.js` import as `string`.
 - `src/index.ts` — Worker entry. Default export routes via `routeAgentRequest`. Also re-exports `ChatAgent`, `Slack`, and `Database` so the Workers runtime can find them.
 - `src/bindings/slack.ts` — `Slack` `WorkerEntrypoint`. Single method `sendMessage(email, text)` gated on the `slack:send_message` scope.
 - `src/bindings/database.ts` — `Database` `WorkerEntrypoint`. Methods for listing tables / reading job events / unblocking jobs, each gated on its own scope. Uses `@neondatabase/serverless`.
 - `src/shared/permissions.ts` — `RequirePermission` decorator and `assertPermission` helper. Direct in-worker calls (no `props`) are always allowed; calls from a sandbox stub created with `ctx.exports.X({ props: { permissions } })` are checked.
-- `src/env.d.ts` — augments `Cloudflare.Env` with the secrets `wrangler types` doesn't introspect: `GOOGLE_GENERATIVE_AI_API_KEY`, `SLACK_BOT_TOKEN`, `DATABASE_URL`.
+- `src/env.d.ts` — augments `Cloudflare.Env` with the secrets `wrangler types` doesn't introspect: `ANTHROPIC_API_KEY`, `SLACK_BOT_TOKEN`, `DATABASE_URL`.
 - `wrangler.jsonc` — DO binding for `ChatAgent` (`v1` SQLite migration), `worker_loaders: [{ binding: "LOADER" }]`, and `compatibility_flags: ["nodejs_compat", "enable_ctx_exports"]`.
 - `tsconfig.json` — strict TS, picks up the generated `worker-configuration.d.ts`.
 
@@ -61,7 +61,7 @@ The model only ever sees the tool *names* (`blockedJobsToSlack`, etc.). It canno
 npm install
 
 # Set secrets (interactive). Required:
-npx wrangler secret put GOOGLE_GENERATIVE_AI_API_KEY
+npx wrangler secret put ANTHROPIC_API_KEY
 # Optional, only if you actually use the bindings:
 npx wrangler secret put SLACK_BOT_TOKEN
 npx wrangler secret put DATABASE_URL
@@ -82,7 +82,9 @@ Re-run `npx wrangler types` any time you edit `wrangler.jsonc`. Secrets are NOT 
 
 ### Swap the model
 
-Change the argument to `google(...)` in `getModel()`. Options: `gemini-2.5-pro` (default), `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-3-pro-preview`.
+Change the argument to `anthropic(...)` in `getModel()`. Cheap → expensive: `claude-haiku-4-5-20251001` (default — fastest/cheapest), `claude-sonnet-4-6`, `claude-opus-4-7`.
+
+To switch providers entirely, swap the import + `createX(...)` call. Make sure to update `ANTHROPIC_API_KEY` in `src/env.d.ts` to match whatever the new provider expects.
 
 ### Add a secret
 

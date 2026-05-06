@@ -1,16 +1,37 @@
 import { Think } from "@cloudflare/think";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 
 import BLOCKED_JOBS_TO_SLACK from "./tools/blocked-jobs-to-slack.sandbox.js";
 
+type ToolSpec = {
+  name: string;
+  description: string;
+  code: string;
+  permissions: string[];
+};
+
+const TOOLS: readonly ToolSpec[] = [
+  {
+    name: "blockedJobsToSlack",
+    description:
+      "Fetch the latest blocked jobs from the database and DM a summary to a Slack user.",
+    code: BLOCKED_JOBS_TO_SLACK,
+    permissions: ["database:get_blocked_jobs", "slack:send_message"],
+  },
+];
+
+export const TOOL_MANIFEST = TOOLS.map(({ name, description, permissions }) => ({
+  name,
+  description,
+  permissions,
+}));
+
 export class ChatAgent extends Think<Env> {
   getModel() {
-    const google = createGoogleGenerativeAI({
-      apiKey: this.env.GOOGLE_GENERATIVE_AI_API_KEY,
-    });
-    return google("gemini-2.5-pro");
+    const anthropic = createAnthropic({ apiKey: this.env.ANTHROPIC_API_KEY });
+    return anthropic("claude-haiku-4-5-20251001");
   }
 
   getSystemPrompt() {
@@ -19,21 +40,19 @@ export class ChatAgent extends Think<Env> {
 
   getTools(): ToolSet {
     const run = this.runInSandbox.bind(this);
-    return {
-      blockedJobsToSlack: tool({
-        description:
-          "Fetch the latest blocked jobs from the database and DM a summary to a Slack user.",
-        inputSchema: z.object({}),
-        execute: async () =>
-          run(BLOCKED_JOBS_TO_SLACK, [
-            "database:get_blocked_jobs",
-            "slack:send_message",
-          ]),
-      }),
-    };
+    return Object.fromEntries(
+      TOOLS.map((spec) => [
+        spec.name,
+        tool({
+          description: spec.description,
+          inputSchema: z.object({}),
+          execute: async () => run(spec.code, spec.permissions),
+        }),
+      ]),
+    );
   }
 
-  // Each named tool above runs a small ES module in the LOADER sandbox with
+  // Each tool above runs a small ES module in the LOADER sandbox with
   // env.SLACK / env.DATABASE stubs that carry the granted permission scopes.
   private async runInSandbox(code: string, permissions: string[]) {
     const ctx = this.ctx as DurableObjectState & {

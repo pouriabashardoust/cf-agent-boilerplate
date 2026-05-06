@@ -4,7 +4,7 @@
 declare global {
   namespace Cloudflare {
     interface Env {
-      GOOGLE_GENERATIVE_AI_API_KEY: string;
+      ANTHROPIC_API_KEY: string;
       SLACK_BOT_TOKEN: string;
       DATABASE_URL: string;
     }

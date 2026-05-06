@@ -1,11 +1,25 @@
 import { routeAgentRequest } from "agents";
 
+import { TOOL_MANIFEST } from "./agent";
+import PLAYGROUND_HTML from "./playground.html";
+
 export { ChatAgent } from "./agent";
 export { Slack } from "./bindings/slack";
 export { Database } from "./bindings/database";
 
 export default {
   async fetch(request: Request, env: Env) {
+    const url = new URL(request.url);
+
+    if (request.method === "GET" && url.pathname === "/") {
+      return new Response(PLAYGROUND_HTML, {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+    if (request.method === "GET" && url.pathname === "/api/tools") {
+      return Response.json(TOOL_MANIFEST);
+    }
+
     return (
       (await routeAgentRequest(request, env)) ||
       new Response("Not found", { status: 404 })

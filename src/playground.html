@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>agent-boilerplate · playground</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root { color-scheme: light dark; --gap: 12px; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
+  aside { border-right: 1px solid #8884; padding: var(--gap); overflow: auto; }
+  aside h2 { font-size: 13px; margin: 0 0 8px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
+  .tool { border: 1px solid #8884; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+  .tool-name { font-weight: 600; }
+  .tool-desc { opacity: 0.8; font-size: 13px; margin-top: 4px; }
+  .tool-perms { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .tool-perms span { font-size: 11px; padding: 1px 6px; border: 1px solid #8884; border-radius: 999px; opacity: 0.75; }
+  main { display: flex; flex-direction: column; min-height: 0; }
+  header { padding: var(--gap); border-bottom: 1px solid #8884; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  header h1 { font-size: 14px; margin: 0; }
+  header .meta { font-size: 12px; opacity: 0.6; }
+  header button { font: inherit; padding: 4px 10px; border: 1px solid #8884; background: transparent; border-radius: 4px; cursor: pointer; color: inherit; }
+  #log { flex: 1; overflow: auto; padding: var(--gap); display: flex; flex-direction: column; gap: 12px; }
+  .msg { white-space: pre-wrap; word-wrap: break-word; }
+  .msg .role { font-size: 11px; text-transform: uppercase; opacity: 0.5; letter-spacing: 0.05em; margin-bottom: 2px; }
+  .msg.user .role { color: #4a9eff; }
+  .msg.assistant .role { color: #2cbe6e; }
+  .tool-call { border-left: 2px solid #d4a017; padding: 6px 8px; margin: 4px 0; background: #d4a01710; font-size: 13px; }
+  .tool-call.done { border-color: #2cbe6e; background: #2cbe6e10; }
+  form { display: flex; gap: 8px; padding: var(--gap); border-top: 1px solid #8884; }
+  textarea { flex: 1; resize: none; padding: 8px; font: inherit; border: 1px solid #8884; border-radius: 4px; background: transparent; color: inherit; min-height: 38px; max-height: 160px; }
+  button[type="submit"] { padding: 8px 16px; font: inherit; border: 1px solid #8884; background: transparent; border-radius: 4px; cursor: pointer; color: inherit; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status { font-size: 11px; opacity: 0.6; padding: 0 var(--gap) 6px; }
+</style>
+</head>
+<body>
+<aside>
+  <h2>Tools</h2>
+  <div id="tools">loading…</div>
+</aside>
+<main>
+  <header>
+    <h1>ChatAgent playground</h1>
+    <div class="meta"><span id="instance"></span> · <button id="reset">new conversation</button></div>
+  </header>
+  <div id="log"></div>
+  <div class="status" id="status">disconnected</div>
+  <form id="form">
+    <textarea id="input" placeholder="Ask the agent something… (Enter to send, Shift+Enter for newline)"></textarea>
+    <button type="submit" id="send">Send</button>
+  </form>
+</main>
+<script type="module">
+  // --- tools manifest ---
+  const tools = await fetch("/api/tools").then(r => r.json()).catch(() => []);
+  const toolsEl = document.getElementById("tools");
+  toolsEl.innerHTML = tools.length === 0
+    ? "<em>no tools registered</em>"
+    : tools.map(t => `
+      <div class="tool">
+        <div class="tool-name">${t.name}</div>
+        <div class="tool-desc">${t.description}</div>
+        <div class="tool-perms">${t.permissions.map(p => `<span>${p}</span>`).join("")}</div>
+      </div>
+    `).join("");
+
+  // --- conversation state ---
+  let instance = localStorage.getItem("playground-instance");
+  if (!instance) {
+    instance = crypto.randomUUID();
+    localStorage.setItem("playground-instance", instance);
+  }
+  document.getElementById("instance").textContent = instance.slice(0, 8);
+  document.getElementById("reset").onclick = () => {
+    localStorage.removeItem("playground-instance");
+    location.reload();
+  };
+
+  const messages = [];
+  const log = document.getElementById("log");
+  const status = document.getElementById("status");
+  const input = document.getElementById("input");
+  const sendBtn = document.getElementById("send");
+
+  function render() {
+    log.innerHTML = "";
+    for (const m of messages) {
+      const div = document.createElement("div");
+      div.className = `msg ${m.role}`;
+      div.innerHTML = `<div class="role">${m.role}</div>`;
+      const body = document.createElement("div");
+      for (const part of m.parts) {
+        if (part.type === "text") {
+          const t = document.createElement("span");
+          t.textContent = part.text;
+          body.appendChild(t);
+        } else if (part.type === "tool") {
+          const t = document.createElement("div");
+          t.className = "tool-call" + (part.done ? " done" : "");
+          t.textContent = part.done
+            ? `✓ ${part.name} → ${typeof part.output === "string" ? part.output : JSON.stringify(part.output)}`
+            : `→ calling ${part.name}…`;
+          body.appendChild(t);
+        }
+      }
+      div.appendChild(body);
+      log.appendChild(div);
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // --- websocket client (Think chat protocol) ---
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/agents/chat-agent/${instance}`);
+  ws.onopen = () => { status.textContent = "connected"; sendBtn.disabled = false; };
+  ws.onclose = () => { status.textContent = "disconnected"; sendBtn.disabled = true; };
+  ws.onerror = () => { status.textContent = "error"; };
+
+  let activeAssistant = null;
+
+  ws.onmessage = (event) => {
+    let m;
+    try { m = JSON.parse(event.data); } catch { return; }
+
+    if (m.type === "cf_agent_chat_messages") {
+      // Server replays canonical message history. Replace local state.
+      messages.length = 0;
+      for (const um of m.messages || []) {
+        const role = um.role;
+        const parts = [];
+        for (const p of um.parts || []) {
+          if (p.type === "text") parts.push({ type: "text", text: p.text || "" });
+          else if (p.type?.startsWith("tool-")) parts.push({
+            type: "tool",
+            name: p.type.replace(/^tool-/, ""),
+            done: p.state === "output-available" || p.state === "output-error",
+            output: p.output,
+          });
+        }
+        messages.push({ role, parts });
+      }
+      activeAssistant = null;
+      render();
+      return;
+    }
+
+    if (m.type !== "cf_agent_use_chat_response") return;
+
+    if (m.error) {
+      if (!activeAssistant) {
+        activeAssistant = { role: "assistant", parts: [{ type: "text", text: "" }] };
+        messages.push(activeAssistant);
+      }
+      activeAssistant.parts.push({ type: "text", text: `\n[error] ${m.body}` });
+      render();
+      return;
+    }
+
+    if (m.done) {
+      activeAssistant = null;
+      sendBtn.disabled = false;
+      return;
+    }
+
+    let chunk;
+    try { chunk = JSON.parse(m.body); } catch { return; }
+
+    if (!activeAssistant) {
+      activeAssistant = { role: "assistant", parts: [] };
+      messages.push(activeAssistant);
+    }
+
+    switch (chunk.type) {
+      case "text-delta": {
+        let last = activeAssistant.parts[activeAssistant.parts.length - 1];
+        if (!last || last.type !== "text") {
+          last = { type: "text", text: "" };
+          activeAssistant.parts.push(last);
+        }
+        last.text += chunk.delta || "";
+        break;
+      }
+      case "tool-input-start":
+      case "tool-input-available": {
+        const existing = activeAssistant.parts.find(
+          (p) => p.type === "tool" && p.toolCallId === chunk.toolCallId,
+        );
+        if (!existing) {
+          activeAssistant.parts.push({
+            type: "tool",
+            toolCallId: chunk.toolCallId,
+            name: chunk.toolName,
+            done: false,
+          });
+        }
+        break;
+      }
+      case "tool-output-available":
+      case "tool-output-error": {
+        const existing = activeAssistant.parts.find(
+          (p) => p.type === "tool" && p.toolCallId === chunk.toolCallId,
+        );
+        if (existing) {
+          existing.done = true;
+          existing.output = chunk.output ?? chunk.errorText;
+        }
+        break;
+      }
+    }
+    render();
+  };
+
+  // --- form handling ---
+  sendBtn.disabled = true;
+  document.getElementById("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text || ws.readyState !== WebSocket.OPEN) return;
+
+    const userMsg = {
+      id: crypto.randomUUID(),
+      role: "user",
+      parts: [{ type: "text", text }],
+    };
+    messages.push({ role: "user", parts: [{ type: "text", text }] });
+    render();
+    input.value = "";
+    sendBtn.disabled = true;
+
+    ws.send(JSON.stringify({
+      type: "cf_agent_use_chat_request",
+      id: crypto.randomUUID(),
+      init: {
+        method: "POST",
+        body: JSON.stringify({ messages: [userMsg] }),
+      },
+    }));
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById("form").requestSubmit();
+    }
+  });
+</script>
+</body>
+</html>

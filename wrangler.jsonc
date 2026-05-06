@@ -3,7 +3,7 @@
   "name": "agent-boilerplate",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-05",
-  "compatibility_flags": ["nodejs_compat", "enable_ctx_exports"],
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },
@@ -18,9 +18,9 @@
   // Worker Loader binding — lets the agent run dynamically-supplied code in a
   // sandbox, with the SLACK / DATABASE entrypoints injected as env bindings.
   "worker_loaders": [{ "binding": "LOADER" }],
-  // Treat *.sandbox.js files as text imports — they are sandbox source code
-  // shipped to env.LOADER, not part of the agent worker's own module graph.
+  // *.sandbox.js — sandbox source code shipped to env.LOADER (text, not code).
+  // *.html — playground UI served verbatim from the worker fetch handler.
   "rules": [
-    { "type": "Text", "globs": ["**/*.sandbox.js"], "fallthrough": false }
+    { "type": "Text", "globs": ["**/*.sandbox.js", "**/*.html"], "fallthrough": false }
   ]
 }
