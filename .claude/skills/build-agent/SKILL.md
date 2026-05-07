@@ -1,11 +1,11 @@
 ---
 name: build-agent
-description: Take the agent-boilerplate repo and configure it into a focused, deployable agent for a specific use case the user describes. Writes the tool sandbox modules, replaces the `TOOLS` array, replaces `getSystemPrompt`, optionally renames the DurableObject class + worker, trims bindings the agent doesn't need, and updates the playground UI to match. Use this whenever the user describes a complete agent they want — phrases like "I want an agent that sends Slack messages", "build me an agent that gets blocked jobs and slacks them", "scaffold an agent for X", "configure this for Y", or anything where the user hands over a use case and expects a working configured project. Trigger this skill even when the user only describes the *behavior* (no mention of tools / wrangler / playground) — they want the whole thing built, this skill knows the full set of files to touch.
+description: Take the agent-boilerplate repo and configure it into a focused, deployable agent for a specific use case the user describes. Writes the tool sandbox modules, replaces the `TOOLS` array, replaces `getSystemPrompt`, optionally renames the DurableObject class + worker, trims bindings the agent doesn't need, and updates the chat UI title to match. Use this whenever the user describes a complete agent they want — phrases like "I want an agent that sends Slack messages", "build me an agent that gets blocked jobs and slacks them", "scaffold an agent for X", "configure this for Y", or anything where the user hands over a use case and expects a working configured project. Trigger this skill even when the user only describes the *behavior* (no mention of tools / wrangler / chat-ui) — they want the whole thing built, this skill knows the full set of files to touch.
 ---
 
 # Building a focused agent from this boilerplate
 
-This repo is a **boilerplate** — `src/agent.ts`, `src/bindings/{slack,database}.ts`, `src/tools/blocked-jobs-to-slack.sandbox.js`, and the playground are all reference scaffolding. The goal of this skill is to turn that scaffold into a working, focused agent for whatever the user described, leaving the repo deploy-ready.
+This repo is a **boilerplate** — `src/agent.ts`, `src/bindings/{slack,database}.ts`, `src/tools/blocked-jobs-to-slack.sandbox.js`, and the `chat-ui/` Vite + React app are all reference scaffolding. The goal of this skill is to turn that scaffold into a working, focused agent for whatever the user described, leaving the repo deploy-ready.
 
 The user gives an intent (e.g. "an agent that DMs blocked jobs to Slack each morning"). Your job is to translate that into:
 
