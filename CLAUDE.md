@@ -105,7 +105,7 @@ The individual scripts are still there if you want to run only one:
 - `npm run dev:worker` — wrangler only (use to hit `:8787` directly with the built `chat-ui/dist/` bundle).
 - `npm run dev:ui` — vite only (only useful with a separately-running worker on `:8787`).
 
-For a "production-like" run, `npm run build:ui && npm run dev:worker` and open `:8787` — the `assets` binding serves the built bundle.
+For a "production-like" run, `npm start` (= `build:ui` then `dev:worker`) and open `:8787` — the `assets` binding serves the built bundle, no Vite, no HMR. Use this to verify what `wrangler deploy` will actually ship.
 
 `npm run deploy` builds the UI then `wrangler deploy`s.
 
