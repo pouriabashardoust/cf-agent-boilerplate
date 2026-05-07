@@ -10,7 +10,7 @@ It is intentionally minimal. Treat the files as a starting point — copy this d
 - `src/tools/*.sandbox.js` — sandbox source modules. Each one is a complete ES module exporting a `default` `fetch` handler. They are bundled as **text strings** (see `rules` in `wrangler.jsonc`) and shipped to `env.LOADER` at tool-call time; they never run inside the agent worker itself.
 - `src/tools/*.sandbox.d.ts` — one-line declaration so TypeScript treats the matching `.sandbox.js` import as `string`.
 - `src/index.ts` — Worker entry. Default export routes `/api/tools` to `TOOL_MANIFEST` and everything else through `routeAgentRequest` (the agents WebSocket / HTTP router). Static assets (`/`, `/assets/*`, etc.) are served by the `assets` binding directly — no fetch handler needed. Also re-exports `ChatAgent`, `Slack`, and `Database` so the Workers runtime can find them.
-- `chat-ui/` — Vite + React + Tailwind v4 + shadcn UI. `src/App.tsx` is the entire chat: `useAgent` from `agents/react` opens a WebSocket to the `ChatAgent` DO, and `useAgentChat` from `@cloudflare/ai-chat/react` drives the message stream. Built with `pnpm --dir chat-ui build` (or `pnpm build:ui` from the repo root) → `chat-ui/dist/` is consumed by the Worker `assets` binding. In dev, `pnpm dev:ui` runs vite on `:5173` and proxies `/api/*` and `/agents/*` to the wrangler dev server on `:6000`.
+- `chat-ui/` — Vite + React + Tailwind v4 + shadcn UI. `src/App.tsx` is the entire chat: `useAgent` from `agents/react` opens a WebSocket to the `ChatAgent` DO, and `useAgentChat` from `@cloudflare/ai-chat/react` drives the message stream. Built with `pnpm --dir chat-ui build` (or `pnpm build:ui` from the repo root) → `chat-ui/dist/` is consumed by the Worker `assets` binding. In dev, `pnpm dev:ui` runs vite on `:5173` and proxies `/api/*` and `/agents/*` to the wrangler dev server on `:8787`.
 - `src/bindings/slack.ts` — `Slack` `WorkerEntrypoint`. Single method `sendMessage(email, text)` gated on the `slack:send_message` scope.
 - `src/bindings/database.ts` — `Database` `WorkerEntrypoint`. Methods for listing tables / reading job events / unblocking jobs, each gated on its own scope. Uses `@neondatabase/serverless`.
 - `src/shared/permissions.ts` — `RequirePermission` decorator and `assertPermission` helper. Direct in-worker calls (no `props`) are always allowed; calls from a sandbox stub created with `ctx.exports.X({ props: { permissions } })` are checked.
@@ -93,16 +93,23 @@ Re-run `npx wrangler types` any time you edit `wrangler.jsonc`. Secrets are NOT 
 
 ### Dev workflow
 
-Two processes:
-
 ```bash
-npm run dev      # wrangler dev on :6000 (Worker + DO + LOADER)
-npm run dev:ui   # vite dev on :5173 (proxies /api + /agents → :6000)
+npm run dev      # runs both via concurrently:
+                 #   [worker] wrangler dev → :8787  (Worker + DO + LOADER)
+                 #   [ui]     vite dev     → :5173  (proxies /api + /agents → :8787)
 ```
 
-Open `http://localhost:5173` for live-reload UI. The vite config proxies the WebSocket and `/api/*` calls to the wrangler server. For a "production-like" run, `npm run build:ui && npm run dev` and hit the wrangler URL on `:6000` directly — the `assets` binding serves the built bundle.
+Open `http://localhost:5173` for live-reload UI; the vite proxy forwards the WebSocket and `/api/*` to the wrangler server. Ctrl-C kills both (`--kill-others-on-fail` also tears the pair down if either crashes).
+
+The individual scripts are still there if you want to run only one:
+- `npm run dev:worker` — wrangler only (use to hit `:8787` directly with the built `chat-ui/dist/` bundle).
+- `npm run dev:ui` — vite only (only useful with a separately-running worker on `:8787`).
+
+For a "production-like" run, `npm run build:ui && npm run dev:worker` and open `:8787` — the `assets` binding serves the built bundle.
 
 `npm run deploy` builds the UI then `wrangler deploy`s.
+
+**Port note**: dev port is `8787` (not `6000` / `6666` / `6667` etc) because those ports are on the [WHATWG fetch port-block list](https://fetch.spec.whatwg.org/#port-blocking). Wrangler's internal proxy uses undici, which refuses blocked ports — symptom is `Empty reply from server` and a blank UI.
 
 ## Common changes
 

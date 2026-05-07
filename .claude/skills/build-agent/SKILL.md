@@ -152,19 +152,16 @@ Pick a name that reflects the agent's purpose; "ChatAgent" / "agent-boilerplate"
   - Top-level `"name": "<kebab-name>"`.
   - `durable_objects.bindings[].class_name` and `.name` → both `"<NewName>"`.
   - **Bump the migration tag** (`v1` → `v2`) and update `new_sqlite_classes` to the new class name. **Never reuse a tag.** Reusing breaks the migration.
-- `src/playground.html`:
-  - The `<title>` element — set to "<Friendly Agent Name> · playground".
-  - The sidebar `.brand .name` and `.brand .sub` divs — set to the friendly name and a one-line subtitle (e.g. "DB → Slack · powered by Claude").
-  - The empty-state `<h2>` and `<p>` — give it a hint like "Ask about blocked jobs" and a sample prompt.
-  - The WebSocket URL: `/agents/chat-agent/${instance}` → `/agents/<kebab-class-name>/${instance}`. The class name is converted to kebab-case for the URL slot (e.g. `BlockedJobsAgent` → `blocked-jobs-agent`).
+- `chat-ui/index.html` — the `<title>` element: `<title>ChatAgent</title>` → `<title><FriendlyName></title>`.
+- `chat-ui/src/App.tsx`:
+  - The `<h1>ChatAgent</h1>` heading text — set to the friendly name.
+  - The `useAgent({ agent: "ChatAgent", name: "playground" })` call — `agent` must match the new class name (e.g. `"BlockedJobsAgent"`). The agents library converts it to kebab-case for the URL slot (`/agents/blocked-jobs-agent/...`) — pass the PascalCase class name, not the kebab form.
+
+That's it for the UI — the chat surface itself is generic, so per-agent customization stops at the title + heading + agent-name binding. Don't touch shadcn components, the textarea/button, or the message rendering.
 
 Run `npx wrangler types` after the wrangler edits — it regenerates `worker-configuration.d.ts` so `Env` reflects the new DO binding name. If you skip this, you'll see TS errors on `this.env.<NewName>`.
 
-## Step 9 — Update the playground tool list (automatic — verify)
-
-The playground sidebar reads from `GET /api/tools`, which serves `TOOL_MANIFEST` from `src/agent.ts`. Since you replaced the `TOOLS` array in Step 5, the manifest updates automatically. Open the playground after deploying to confirm the tool names you intended are the ones showing.
-
-## Step 10 — Verify
+## Step 9 — Verify
 
 Always run, in this order, before declaring done:
 
@@ -194,7 +191,7 @@ If both pass, summarise for the user:
 5. **TOOLS array** — replaced with one entry pointing at the new tool.
 6. **System prompt** — "You are a blocked-jobs notifier for the data team. When asked, call `notifyBlockedJobs`. Don't make up job details. Don't act on anything else."
 7. **Trim** — neither binding is dropped. `package.json` left alone.
-8. **Rename** — `ChatAgent` → `BlockedJobsAgent`, worker `agent-boilerplate` → `blocked-jobs-agent`, migration `v1` → `v2` with `new_sqlite_classes: ["BlockedJobsAgent"]`. Playground `<title>`, `<h1>`, and WebSocket URL updated.
+8. **Rename** — `ChatAgent` → `BlockedJobsAgent`, worker `agent-boilerplate` → `blocked-jobs-agent`, migration `v1` → `v2` with `new_sqlite_classes: ["BlockedJobsAgent"]`. `chat-ui/index.html` `<title>` and `chat-ui/src/App.tsx` (`<h1>` text + `useAgent({ agent: "BlockedJobsAgent", ... })`) updated.
 9. **Verify** — `tsc` + `wrangler deploy --dry-run`. Tell the user to set `ANTHROPIC_API_KEY`, `SLACK_BOT_TOKEN`, `DATABASE_URL`.
 
 ## Worked example: "I want an agent that sends Slack messages"
