@@ -6,10 +6,10 @@
   "scripts": {
     "dev": "concurrently --names worker,ui --prefix-colors blue,magenta --kill-others-on-fail \"npm:dev:worker\" \"npm:dev:ui\"",
     "dev:worker": "wrangler dev --port 8787 --inspector-port 8788",
-    "dev:ui": "pnpm --dir chat-ui dev",
-    "build:ui": "pnpm --dir chat-ui build",
+    "dev:ui": "npm --prefix chat-ui run dev",
+    "build:ui": "npm --prefix chat-ui run build",
     "start": "npm run build:ui && npm run dev:worker",
-    "deploy": "pnpm build:ui && wrangler deploy",
+    "deploy": "npm run build:ui && wrangler deploy",
     "types": "wrangler types",
     "typecheck": "tsc --noEmit"
   },
