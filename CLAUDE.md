@@ -4,9 +4,26 @@ This is a **boilerplate** for scaffolding [Cloudflare Think agents](https://deve
 
 It is intentionally minimal. Treat the files as a starting point — copy this directory, rename, and fill in the agent's real behavior.
 
+## Quick start
+
+```bash
+npm install
+npm --prefix chat-ui install
+
+# Required secret. Optional ones are listed under "First-time setup" below.
+npx wrangler secret put ANTHROPIC_API_KEY
+
+npm run dev        # worker on :8787 + vite on :5173, both with HMR
+# → open http://localhost:5173
+```
+
+`npm start` runs the production-style flow instead: `npm run build:ui && npm run dev:worker` — wrangler serves the built `chat-ui/dist/` bundle on `:8787` (no Vite, no HMR). Use this to mirror `wrangler deploy`.
+
+`npm run deploy` builds the UI then `wrangler deploy`s.
+
 ## What's in the box
 
-- `src/agent.ts` — `ChatAgent` extends `Think<Env>`. Implements `getModel()` (Anthropic Haiku 4.5), `getSystemPrompt()`, an example tool `blockedJobsToSlack` that runs a sandbox source module through `env.LOADER` with `env.SLACK` / `env.DATABASE` injected, and the schedule tools (`schedule_task` / `list_schedules` / `cancel_schedule`) plus `runScheduledPrompt(payload)` — when a scheduled task fires, the saved prompt is replayed as a user turn and the stream is broadcast to any connected playground tab. The private helper `runInSandbox(code, permissions)` is the seam for new sandboxed tools.
+- `src/agent.ts` — `ChatAgent` extends `Think<Env>`. Implements `getModel()` (Anthropic Haiku 4.5), `getSystemPrompt()`, an example tool `blockedJobsToSlack` that runs a sandbox source module through `env.LOADER` with `env.SLACK` / `env.DATABASE` injected, and the schedule tools (`schedule_task` / `list_schedules` / `cancel_schedule`) plus `runScheduledPrompt(payload)` — when a scheduled task fires, the saved prompt is replayed as a user turn and the stream is broadcast to any connected chat-ui tab. The private helper `runInSandbox(code, permissions)` is the seam for new sandboxed tools.
 - `src/tools/*.sandbox.js` — sandbox source modules. Each one is a complete ES module exporting a `default` `fetch` handler. They are bundled as **text strings** (see `rules` in `wrangler.jsonc`) and shipped to `env.LOADER` at tool-call time; they never run inside the agent worker itself.
 - `src/tools/*.sandbox.d.ts` — one-line declaration so TypeScript treats the matching `.sandbox.js` import as `string`.
 - `src/index.ts` — Worker entry. Default export routes `/api/tools` to `TOOL_MANIFEST` and everything else through `routeAgentRequest` (the agents WebSocket / HTTP router). Static assets (`/`, `/assets/*`, etc.) are served by the `assets` binding directly — no fetch handler needed. Also re-exports `ChatAgent`, `Slack`, and `Database` so the Workers runtime can find them.
@@ -37,7 +54,7 @@ Three built-in tools let the agent schedule future turns of itself:
 - `list_schedules()` — returns all active schedules.
 - `cancel_schedule({ id })` — cancels by id.
 
-When a scheduled task fires, `runScheduledPrompt({ prompt })` is invoked by the alarm system. It calls `this.chat(prompt, callback)` to run a full agentic turn and rebroadcasts each chunk via `_broadcastChat` + a final `_broadcastMessages()` so any playground tab connected at the time sees the streaming response live. Disconnected clients pick it up on next reconnect via the standard `cf_agent_chat_messages` history replay.
+When a scheduled task fires, `runScheduledPrompt({ prompt })` is invoked by the alarm system. It calls `this.chat(prompt, callback)` to run a full agentic turn and rebroadcasts each chunk via `_broadcastChat` + a final `_broadcastMessages()` so any chat-ui tab connected at the time sees the streaming response live. Disconnected clients pick it up on next reconnect via the standard `cf_agent_chat_messages` history replay.
 
 ### Adding a new tool
 
@@ -70,48 +87,53 @@ When a scheduled task fires, `runScheduledPrompt({ prompt })` is invoked by the 
 ## First-time setup
 
 ```bash
-npm install
-npm --prefix chat-ui install
-
-# Set secrets (interactive). Required:
-npx wrangler secret put ANTHROPIC_API_KEY
-# Optional, only if you actually use the bindings:
+# Optional secrets (only if the matching binding is actually used):
 npx wrangler secret put SLACK_BOT_TOKEN
 npx wrangler secret put DATABASE_URL
-# Optional, enables LLM tracing to PostHog when set:
+# Optional — enables LLM tracing to PostHog when set:
 npx wrangler secret put POSTHOG_API_KEY
-npx wrangler secret put POSTHOG_HOST  # defaults to https://us.i.posthog.com
+npx wrangler secret put POSTHOG_HOST   # defaults to https://us.i.posthog.com
 
-# Generate the Env type (writes worker-configuration.d.ts)
+# Regenerate the Env type after editing wrangler.jsonc
 npx wrangler types
-
-# Build the UI bundle once so wrangler has assets to serve
-npm run build:ui
 ```
 
-Re-run `npx wrangler types` any time you edit `wrangler.jsonc`. Secrets are NOT picked up — keep `src/env.d.ts` in sync by hand.
+`wrangler types` does NOT introspect secrets — keep them in sync by hand in `src/env.d.ts`.
 
-### Dev workflow
+## Scripts reference
 
-```bash
-npm run dev      # runs both via concurrently:
-                 #   [worker] wrangler dev → :8787  (Worker + DO + LOADER)
-                 #   [ui]     vite dev     → :5173  (proxies /api + /agents → :8787)
-```
+| Command            | What it does                                                                 |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `npm run dev`      | Worker (`:8787`) + Vite (`:5173`) in parallel. **Use this while developing.** |
+| `npm start`        | `build:ui` + `dev:worker` — production-style, served from `chat-ui/dist/`.   |
+| `npm run dev:worker` | Wrangler only (`:8787`). Serves whatever's in `chat-ui/dist/`.             |
+| `npm run dev:ui`   | Vite only (`:5173`). Needs a worker running on `:8787` to be useful.         |
+| `npm run build:ui` | One-shot Vite build → `chat-ui/dist/`.                                       |
+| `npm run deploy`   | Builds the UI, then `wrangler deploy`.                                       |
+| `npm run types`    | `wrangler types`. Run after every `wrangler.jsonc` edit.                     |
+| `npm run typecheck`| `tsc --noEmit` for the worker.                                               |
 
-Open `http://localhost:5173` for live-reload UI; the vite proxy forwards the WebSocket and `/api/*` to the wrangler server. Ctrl-C kills both (`--kill-others-on-fail` also tears the pair down if either crashes).
+In `npm run dev`, vite proxies `/api/*` and `/agents/*` (WebSocket) to the worker, so the browser only ever talks to `:5173`. Ctrl-C kills both processes (`--kill-others-on-fail` also tears the pair down if either crashes).
 
-The individual scripts are still there if you want to run only one:
-- `npm run dev:worker` — wrangler only (use to hit `:8787` directly with the built `chat-ui/dist/` bundle).
-- `npm run dev:ui` — vite only (only useful with a separately-running worker on `:8787`).
-
-For a "production-like" run, `npm start` (= `build:ui` then `dev:worker`) and open `:8787` — the `assets` binding serves the built bundle, no Vite, no HMR. Use this to verify what `wrangler deploy` will actually ship.
-
-`npm run deploy` builds the UI then `wrangler deploy`s.
-
-**Port note**: dev port is `8787` (not `6000` / `6666` / `6667` etc) because those ports are on the [WHATWG fetch port-block list](https://fetch.spec.whatwg.org/#port-blocking). Wrangler's internal proxy uses undici, which refuses blocked ports — symptom is `Empty reply from server` and a blank UI.
+**Port note**: dev port is `8787` (not `6000` / `6666` / `6667` etc) — those are on the [WHATWG fetch port-block list](https://fetch.spec.whatwg.org/#port-blocking). Wrangler's internal proxy uses undici, which refuses blocked ports — symptom is `Empty reply from server` and a blank UI.
 
 ## Common changes
+
+### Extend an existing binding (add a method)
+
+The `Slack` and `Database` bindings are plain `WorkerEntrypoint` classes — add a method, give it a permission scope, and use it from a new (or existing) sandbox tool.
+
+1. Open the binding (`src/bindings/slack.ts` or `src/bindings/database.ts`).
+2. Add a method, decorated with `@RequirePermission("<entity>:<action>")`:
+   ```ts
+   @RequirePermission("slack:upload_file")
+   async uploadFile(channel: string, filename: string, bytes: ArrayBuffer) {
+     // call the Slack API…
+   }
+   ```
+3. Use it from a sandbox tool's `fetch` handler via `env.SLACK.uploadFile(...)` / `env.DATABASE.<newMethod>(...)`. Add the matching scope to that tool's `permissions` array in `src/agent.ts`.
+
+The model never sees the binding directly — it only sees the named tools — so adding a method is safe even if you don't immediately wire it into a tool.
 
 ### Add another binding
 
@@ -119,11 +141,14 @@ For a "production-like" run, `npm start` (= `build:ui` then `dev:worker`) and op
 2. Re-export it from `src/index.ts` so the runtime registers it.
 3. In `runInSandbox`, add it to `ctx.exports` and inject it into the sandbox `env`.
 
-### Swap the model
+### Swap the model (or provider)
 
-Change the argument to `anthropic(...)` in `getModel()`. Cheap → expensive: `claude-haiku-4-5-20251001` (default — fastest/cheapest), `claude-sonnet-4-6`, `claude-opus-4-7`.
+`getModel()` in `src/agent.ts` returns the model used for every turn.
 
-To switch providers entirely, swap the import + `createX(...)` call. Make sure to update `ANTHROPIC_API_KEY` in `src/env.d.ts` to match whatever the new provider expects.
+- **Different Anthropic model** — change the argument to `anthropic(...)`. Cheap → expensive: `claude-haiku-4-5-20251001` (default — fastest/cheapest), `claude-sonnet-4-6`, `claude-opus-4-7`.
+- **Different provider** — swap the import + `createX(...)` call (e.g. `@ai-sdk/openai`, `@ai-sdk/google`, `workers-ai-provider`). Update the secret name in `src/env.d.ts` to match what the new provider expects, and run `wrangler secret put <NEW_KEY>`.
+
+`tracedModel(this.env, ..., { distinctId: this.name })` wraps whatever model you pass — keep the wrapper to preserve PostHog tracing.
 
 ### Add a secret
 
@@ -145,4 +170,4 @@ To switch providers entirely, swap the import + `createX(...)` call. Make sure t
 - The `enable_ctx_exports` flag is load-bearing — `runInSandbox` reads `ctx.exports.{Slack,Database}` to mint per-call stubs. Removing the flag breaks the tool.
 - `@cloudflare/think` is pinned at `^0.1.0`. Its surface is `getModel` / `getSystemPrompt` / `getTools` / `getMaxSteps` / `assembleContext` / `onChatMessage`. Newer Think APIs (`configureSession`, `Session`, `withContext`) belong to a later major version and are NOT available — don't try to use them.
 - Permission scopes are free-form strings agreed upon between the binding and the caller. Existing scopes: `slack:send_message`, `database:list_tables`, `database:get_blocked_jobs`, `database:unblock_job`. Add new ones consistently (`<entity>:<action>`).
-- The `agents` package provides `routeAgentRequest`; client code uses `useAgent` + `useAgentChat` from `agents/react` (not included here — add when you build the UI).
+- The `agents` package provides `routeAgentRequest` (worker side). Client code in `chat-ui/` uses `useAgent` from `agents/react` and `useAgentChat` from `@cloudflare/ai-chat/react` — same protocol, no manual WebSocket plumbing.
