@@ -10,7 +10,7 @@ It is intentionally minimal. Treat the files as a starting point — copy this d
 - `src/tools/*.sandbox.js` — sandbox source modules. Each one is a complete ES module exporting a `default` `fetch` handler. They are bundled as **text strings** (see `rules` in `wrangler.jsonc`) and shipped to `env.LOADER` at tool-call time; they never run inside the agent worker itself.
 - `src/tools/*.sandbox.d.ts` — one-line declaration so TypeScript treats the matching `.sandbox.js` import as `string`.
 - `src/index.ts` — Worker entry. Default export routes `/api/tools` to `TOOL_MANIFEST` and everything else through `routeAgentRequest` (the agents WebSocket / HTTP router). Static assets (`/`, `/assets/*`, etc.) are served by the `assets` binding directly — no fetch handler needed. Also re-exports `ChatAgent`, `Slack`, and `Database` so the Workers runtime can find them.
-- `chat-ui/` — Vite + React + Tailwind v4 + shadcn UI. `src/App.tsx` is the entire chat: `useAgent` from `agents/react` opens a WebSocket to the `ChatAgent` DO, and `useAgentChat` from `@cloudflare/ai-chat/react` drives the message stream. Built with `pnpm --dir chat-ui build` (or `pnpm build:ui` from the repo root) → `chat-ui/dist/` is consumed by the Worker `assets` binding. In dev, `pnpm dev:ui` runs vite on `:5173` and proxies `/api/*` and `/agents/*` to the wrangler dev server on `:8787`.
+- `chat-ui/` — Vite + React + Tailwind v4 + shadcn UI. `src/App.tsx` is the entire chat: `useAgent` from `agents/react` opens a WebSocket to the `ChatAgent` DO, and `useAgentChat` from `@cloudflare/ai-chat/react` drives the message stream. Built with `npm run build:ui` from the repo root → `chat-ui/dist/` is consumed by the Worker `assets` binding. In dev, `npm run dev:ui` runs vite on `:5173` and proxies `/api/*` and `/agents/*` to the wrangler dev server on `:8787`.
 - `src/bindings/slack.ts` — `Slack` `WorkerEntrypoint`. Single method `sendMessage(email, text)` gated on the `slack:send_message` scope.
 - `src/bindings/database.ts` — `Database` `WorkerEntrypoint`. Methods for listing tables / reading job events / unblocking jobs, each gated on its own scope. Uses `@neondatabase/serverless`.
 - `src/shared/permissions.ts` — `RequirePermission` decorator and `assertPermission` helper. Direct in-worker calls (no `props`) are always allowed; calls from a sandbox stub created with `ctx.exports.X({ props: { permissions } })` are checked.
@@ -71,7 +71,7 @@ When a scheduled task fires, `runScheduledPrompt({ prompt })` is invoked by the 
 
 ```bash
 npm install
-pnpm --dir chat-ui install   # UI uses pnpm
+npm --prefix chat-ui install
 
 # Set secrets (interactive). Required:
 npx wrangler secret put ANTHROPIC_API_KEY
