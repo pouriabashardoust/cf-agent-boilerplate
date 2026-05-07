@@ -137,12 +137,13 @@ function App() {
             )}
 
             {messages.map((m) => {
-              const text = m.parts
-                .filter((p): p is { type: "text"; text: string } => p.type === "text")
-                .map((p) => p.text)
-                .join("");
-              if (!text) return null;
               const isUser = m.role === "user";
+              const renderable = m.parts.filter(
+                (p) =>
+                  (p.type === "text" && (p as { text: string }).text) ||
+                  p.type.startsWith("tool-"),
+              );
+              if (renderable.length === 0) return null;
               return (
                 <div key={m.id}>
                   <div className="flex items-center gap-3 mb-3">
@@ -159,15 +160,31 @@ function App() {
                       }`}
                     />
                   </div>
-                  {isUser ? (
-                    <div className="text-[14.5px] leading-[1.7] whitespace-pre-wrap text-foreground">
-                      {text}
-                    </div>
-                  ) : (
-                    <div className="text-[14.5px] text-foreground/90">
-                      <Markdown>{text}</Markdown>
-                    </div>
-                  )}
+                  <div
+                    className={`text-[14.5px] ${
+                      isUser ? "text-foreground" : "text-foreground/90"
+                    }`}
+                  >
+                    {renderable.map((p, i) => {
+                      if (p.type === "text") {
+                        const text = (p as { text: string }).text;
+                        return isUser ? (
+                          <div
+                            key={i}
+                            className="leading-[1.7] whitespace-pre-wrap"
+                          >
+                            {text}
+                          </div>
+                        ) : (
+                          <Markdown key={i}>{text}</Markdown>
+                        );
+                      }
+                      if (p.type.startsWith("tool-")) {
+                        return <ToolCall key={i} part={p as ToolPart} />;
+                      }
+                      return null;
+                    })}
+                  </div>
                 </div>
               );
             })}
