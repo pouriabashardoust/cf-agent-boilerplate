@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sidebar, type ConnectionStatus } from "@/components/sidebar";
 import { Markdown } from "@/components/markdown";
+import { ToolCall, type ToolPart } from "@/components/tool-call";
 import { useTools } from "@/lib/useTools";
 
 const AGENT_NAME = "ChatAgent";
