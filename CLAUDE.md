@@ -9,13 +9,14 @@ It is intentionally minimal. Treat the files as a starting point — copy this d
 - `src/agent.ts` — `ChatAgent` extends `Think<Env>`. Implements `getModel()` (Anthropic Haiku 4.5), `getSystemPrompt()`, an example tool `blockedJobsToSlack` that runs a sandbox source module through `env.LOADER` with `env.SLACK` / `env.DATABASE` injected, and the schedule tools (`schedule_task` / `list_schedules` / `cancel_schedule`) plus `runScheduledPrompt(payload)` — when a scheduled task fires, the saved prompt is replayed as a user turn and the stream is broadcast to any connected playground tab. The private helper `runInSandbox(code, permissions)` is the seam for new sandboxed tools.
 - `src/tools/*.sandbox.js` — sandbox source modules. Each one is a complete ES module exporting a `default` `fetch` handler. They are bundled as **text strings** (see `rules` in `wrangler.jsonc`) and shipped to `env.LOADER` at tool-call time; they never run inside the agent worker itself.
 - `src/tools/*.sandbox.d.ts` — one-line declaration so TypeScript treats the matching `.sandbox.js` import as `string`.
-- `src/index.ts` — Worker entry. Default export routes via `routeAgentRequest`. Also re-exports `ChatAgent`, `Slack`, and `Database` so the Workers runtime can find them.
+- `src/index.ts` — Worker entry. Default export routes `/api/tools` to `TOOL_MANIFEST` and everything else through `routeAgentRequest` (the agents WebSocket / HTTP router). Static assets (`/`, `/assets/*`, etc.) are served by the `assets` binding directly — no fetch handler needed. Also re-exports `ChatAgent`, `Slack`, and `Database` so the Workers runtime can find them.
+- `chat-ui/` — Vite + React + Tailwind v4 + shadcn UI. `src/App.tsx` is the entire chat: `useAgent` from `agents/react` opens a WebSocket to the `ChatAgent` DO, and `useAgentChat` from `@cloudflare/ai-chat/react` drives the message stream. Built with `pnpm --dir chat-ui build` (or `pnpm build:ui` from the repo root) → `chat-ui/dist/` is consumed by the Worker `assets` binding. In dev, `pnpm dev:ui` runs vite on `:5173` and proxies `/api/*` and `/agents/*` to the wrangler dev server on `:6000`.
 - `src/bindings/slack.ts` — `Slack` `WorkerEntrypoint`. Single method `sendMessage(email, text)` gated on the `slack:send_message` scope.
 - `src/bindings/database.ts` — `Database` `WorkerEntrypoint`. Methods for listing tables / reading job events / unblocking jobs, each gated on its own scope. Uses `@neondatabase/serverless`.
 - `src/shared/permissions.ts` — `RequirePermission` decorator and `assertPermission` helper. Direct in-worker calls (no `props`) are always allowed; calls from a sandbox stub created with `ctx.exports.X({ props: { permissions } })` are checked.
 - `src/env.d.ts` — augments `Cloudflare.Env` with the secrets `wrangler types` doesn't introspect: `ANTHROPIC_API_KEY`, `SLACK_BOT_TOKEN`, `DATABASE_URL`, plus the optional `POSTHOG_API_KEY` / `POSTHOG_HOST`.
 - `src/posthog.ts` — `tracedModel(env, model, opts)` wraps a Vercel-AI-SDK model with PostHog LLM tracing via `@posthog/ai/vercel`. Returns the model unchanged if `POSTHOG_API_KEY` isn't set, so tracing is opt-in. The `agent.ts` `getModel()` passes `this.name` (the DO instance / conversation ID) as the `distinctId`.
-- `wrangler.jsonc` — DO binding for `ChatAgent` (`v1` SQLite migration), `worker_loaders: [{ binding: "LOADER" }]`, and `compatibility_flags: ["nodejs_compat", "enable_ctx_exports"]`.
+- `wrangler.jsonc` — DO binding for `ChatAgent` (`v1` SQLite migration), `worker_loaders: [{ binding: "LOADER" }]`, `assets` binding pointing at `chat-ui/dist/` (SPA fallback), and `compatibility_flags: ["nodejs_compat", "enable_ctx_exports"]`.
 - `tsconfig.json` — strict TS, picks up the generated `worker-configuration.d.ts`.
 
 ## How tools work
@@ -70,6 +71,7 @@ When a scheduled task fires, `runScheduledPrompt({ prompt })` is invoked by the 
 
 ```bash
 npm install
+pnpm --dir chat-ui install   # UI uses pnpm
 
 # Set secrets (interactive). Required:
 npx wrangler secret put ANTHROPIC_API_KEY
@@ -82,9 +84,25 @@ npx wrangler secret put POSTHOG_HOST  # defaults to https://us.i.posthog.com
 
 # Generate the Env type (writes worker-configuration.d.ts)
 npx wrangler types
+
+# Build the UI bundle once so wrangler has assets to serve
+npm run build:ui
 ```
 
 Re-run `npx wrangler types` any time you edit `wrangler.jsonc`. Secrets are NOT picked up — keep `src/env.d.ts` in sync by hand.
+
+### Dev workflow
+
+Two processes:
+
+```bash
+npm run dev      # wrangler dev on :6000 (Worker + DO + LOADER)
+npm run dev:ui   # vite dev on :5173 (proxies /api + /agents → :6000)
+```
+
+Open `http://localhost:5173` for live-reload UI. The vite config proxies the WebSocket and `/api/*` calls to the wrangler server. For a "production-like" run, `npm run build:ui && npm run dev` and hit the wrangler URL on `:6000` directly — the `assets` binding serves the built bundle.
+
+`npm run deploy` builds the UI then `wrangler deploy`s.
 
 ## Common changes
 

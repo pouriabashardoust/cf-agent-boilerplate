@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 6000 --inspector-port 6001",
-    "deploy": "wrangler deploy",
+    "dev:ui": "pnpm --dir chat-ui dev",
+    "build:ui": "pnpm --dir chat-ui build",
+    "deploy": "pnpm build:ui && wrangler deploy",
     "types": "wrangler types",
     "typecheck": "tsc --noEmit"
   },

@@ -19,8 +19,15 @@
   // sandbox, with the SLACK / DATABASE entrypoints injected as env bindings.
   "worker_loaders": [{ "binding": "LOADER" }],
   // *.sandbox.js — sandbox source code shipped to env.LOADER (text, not code).
-  // *.html — playground UI served verbatim from the worker fetch handler.
   "rules": [
-    { "type": "Text", "globs": ["**/*.sandbox.js", "**/*.html"], "fallthrough": false }
-  ]
+    { "type": "Text", "globs": ["**/*.sandbox.js"], "fallthrough": false }
+  ],
+  // Static UI bundle. Run `pnpm --dir chat-ui build` before `wrangler dev`/`deploy`.
+  // The Worker only handles requests not matched by an asset (`run_worker_first: false`),
+  // so `/api/*` and `/agents/*` keep flowing to fetch().
+  "assets": {
+    "directory": "chat-ui/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  }
 }
