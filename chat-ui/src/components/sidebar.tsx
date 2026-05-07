@@ -43,33 +43,29 @@ export function Sidebar({
 
   return (
     <aside className="flex h-full w-full flex-col bg-card border-r border-border">
-      <div className="px-5 py-4 border-b border-border">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span
-              className={`size-2 rounded-full shrink-0 ${dotClass}`}
-              aria-hidden
-            />
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-medium tracking-tight truncate">
-                {agentName}
-              </span>
-              <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                {STATUS_LABEL[status]}
-              </span>
-            </div>
-          </div>
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="md:hidden text-muted-foreground hover:text-foreground text-xl leading-none px-2 py-1 -mr-2"
-              aria-label="Close panel"
-            >
-              ×
-            </button>
-          )}
+      <div className="h-14 flex items-center justify-between gap-3 px-5 border-b border-border">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className={`size-2 rounded-full shrink-0 ${dotClass}`}
+            aria-hidden
+          />
+          <span className="text-sm font-medium tracking-tight truncate">
+            {agentName}
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground shrink-0">
+            · {STATUS_LABEL[status]}
+          </span>
         </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="md:hidden text-muted-foreground hover:text-foreground text-xl leading-none px-2 py-1 -mr-2"
+            aria-label="Close panel"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
